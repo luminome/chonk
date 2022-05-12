@@ -1,0 +1,1735 @@
+<!DOCTYPE html>
+<!--https://scottandrecampbell.com/static/jan7-1.html?ok-->
+<!--https://www.toptal.com/javascript/comprehensive-guide-javascript-design-patterns-->
+<!--https://blog.sessionstack.com/how-javascript-works-memory-management-how-to-handle-4-common-memory-leaks-3f28b94cfbec-->
+<!--https://developer.mozilla.org/en-US/docs/Web/JavaScript/Memory_Management-->
+
+<html lang="en">
+<head>
+	<title>chonky jan20-1 sac</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link type="text/css" rel="stylesheet" href="./css/basic.css">
+	<!--		<script src="js/vendor/modernizr-3.11.2.min.js"></script>-->
+	<style>
+		svg {
+			display: block;
+		}
+
+		#nav_bar {
+			position: absolute;
+			height: 24px;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			display: block;
+			background-color: black;
+			margin: 0;
+			padding: 0;
+			/*opacity:0.5;*/
+		}
+
+		#load_bar {
+			position: absolute;
+			height: 1px;
+			left: 0;
+			bottom: 24px;
+			width: 100px;
+			background: repeating-linear-gradient(to right, greenyellow 0, greenyellow 10px, transparent 10px, transparent 12px);
+
+		}
+
+		#info {
+			position: absolute;
+			color: greenyellow;
+			font-family: heavy_data, sans-serif;
+			/*font-variant-numeric: tabular-nums lining-nums;*/
+			bottom: 24px;
+			overflow: visible;
+			font-size: 9px;
+			line-height: 12px;
+			padding: 8px;
+			background-color: #11113380;
+		}
+
+		.highlited {
+			color: white;
+		}
+
+		.svg_text {
+			color: greenyellow;
+			font-family: heavy_data, sans-serif;
+		}
+
+	</style>
+</head>
+<body>
+<div id="info"></div>
+<div id="nav_bar">
+	<svg id="nav_svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"/>
+</div>
+<div id="load_bar"></div>
+<script type="module">
+
+	import {dragControls} from './js/drags.js';
+	import {keyControls} from './js/keys.js';
+	import * as THREE from 'three/build/three.module.js';///build/three.module.js';
+	import {GUI} from 'three/examples/jsm/libs/lil-gui.module.min.js';
+	import Stats from 'three/examples/jsm/libs/stats.module.js';
+	import {LineMaterial} from 'three/examples/jsm/lines/LineMaterial.js';
+	import {LineGeometry} from 'three/examples/jsm/lines/LineGeometry.js';
+	import {Line2} from 'three/examples/jsm/lines/Line2.js';
+	import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader.js';
+	import {mergeBufferGeometries, mergeVertices} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+
+	"use strict";
+	const nav_bar_offset = 24;
+	const svgNS = "http://www.w3.org/2000/svg";
+	const svg = document.getElementById("nav_svg");
+	const loader = document.getElementById("load_bar");
+	svg.setAttributeNS(null, 'width', window.innerWidth);
+	svg.setAttributeNS(null, 'height', nav_bar_offset);
+
+	function createRect(tag_id, color, width, opacity) {
+		let rect = document.createElementNS(svgNS, 'rect');
+		rect.setAttributeNS(null, 'id', tag_id);
+		rect.setAttributeNS(null, 'x', (width / -2));
+		rect.setAttributeNS(null, 'y', 0);
+		rect.setAttributeNS(null, 'width', width);
+		rect.setAttributeNS(null, 'height', nav_bar_offset);
+		rect.setAttributeNS(null, 'fill', color);
+		rect.setAttributeNS(null, 'opacity', opacity);
+		rect.setAttributeNS(null, 'href', 'http://www.google.com');
+		rect.setAttributeNS(svgNS, 'data-wid', width);
+		svg.appendChild(rect);
+	}
+
+	function createText() {
+		let newText = document.createElementNS(svgNS, "text");
+		newText.setAttributeNS(null, 'id', 'nav_info');
+		newText.setAttributeNS(null, "x", 8);
+		newText.setAttributeNS(null, "y", nav_bar_offset - 8);
+		newText.setAttributeNS(null, "fill", 'greenyellow');
+		newText.setAttributeNS(null, "class", 'svg_text');
+		// newText.setAttributeNS(null,"width","100%");
+		newText.setAttributeNS(null, "height", "auto");
+		newText.setAttributeNS(null, "font-size", "9");
+		newText.appendChild(document.createTextNode('hello'));
+		// add the text node to the SVG element
+		svg.appendChild(newText);
+	}
+
+	let nav_bar_pos = 0.5;
+	let nav_origin = 0.5;
+	let nav_zero = 0.5;
+
+	function update_nav_position(U_pos) {
+		let r_mark = svg.childNodes[0];
+		let p = window.innerWidth * 0.5;//U_pos;
+		nav_bar_pos = U_pos;
+		r_mark.setAttributeNS(null, 'x', p - 2);//(p-3).toString());
+	}
+
+	createRect('svg_center', 'gray', 4, 1);
+	createRect('svg_origin', 'orange', 6, 1);
+	createRect('svg_zero', 'white', 2, 0.2);
+
+	const svg_center = svg.getElementById("svg_center");
+	const svg_origin = svg.getElementById("svg_origin");
+	const svg_zero = svg.getElementById("svg_zero");
+
+	let user_nav_position = 0;
+	let user_nav_guide_length = 0;
+	let user_slide_scale = 0;
+
+	const el_width = (e) => parseFloat(e.getAttributeNS(svgNS, 'data-wid')) / 2;
+
+	function create_landmark(position, scale, name, pid) {
+		let circle = document.createElementNS(svgNS, 'circle');
+		circle.setAttributeNS(null, 'cx', 10);
+		circle.setAttributeNS(null, 'cy', nav_bar_offset / 2);
+		circle.setAttributeNS(null, 'r', 2 + ((4 - scale) / 2) * 2);//(4/scale)*2);
+		circle.setAttributeNS(null, 'style', 'fill: yellow; stroke: black; stroke-width: 0.5px;');
+		circle.setAttributeNS(svgNS, 'data-name', name);
+		circle.setAttributeNS(svgNS, 'data-id', pid);
+		circle.setAttributeNS(svgNS, 'data-wid', 2 + ((4 - scale) / 2) * 4);
+		circle.setAttributeNS(svgNS, 'data-pos-scalar', position);
+		circle.setAttributeNS(svgNS, 'data-pos-offset', position);
+		console.log(name, position);
+		return circle;
+	}
+
+	function nav_update_guide_places(guide_data_obj) {
+		//console.log(vars.user.guide_position_scalar);
+		let guide_id = guide_data_obj.userData.guide.shape;
+		let nav_guide = svg.getElementById(guide_id + '-guide');
+		if (!nav_guide) nav_build_guide_places(guide_id);
+		nav_guide = svg.getElementById(guide_id + '-guide');
+
+		let places = guide_data_obj.userData.guide.linked_places;
+		let rip_stop = 0;
+		let len = nav_guide.getAttributeNS(svgNS, 'data-indexed');
+		if (len !== null) {
+			if (len < places.length) {
+				rip_stop = len;
+			}
+		}
+		nav_guide.setAttributeNS(svgNS, 'data-indexed', places.length);
+		let zp = user_nav_position - 0.5;
+		zp = naturalize_on_loop(zp, true);
+		for (let i = rip_stop; i < places.length; i++) {
+			const p = places[i];
+			let position = p.position;
+			let scale = p.place.scale;
+			const circle = create_landmark(position, scale, p.place.name, i);
+			let ps = zp - position;
+			ps = naturalize_on_loop(ps, true);
+			circle.setAttributeNS(null, 'cx', (window.innerWidth * ps));
+			circle.setAttributeNS(svgNS, 'data-pos-offset', ps);
+			nav_guide.appendChild(circle);
+		}
+	}
+
+	function nav_build_guide_places(guide_shape_id) {
+		let group = document.createElementNS(svgNS, 'g');
+		group.setAttributeNS(null, 'id', guide_shape_id + '-guide');
+		group.setAttributeNS(null, 'class', 'guide_places');
+		group.setAttributeNS(null, 'x', 0);
+		group.setAttributeNS(null, 'y', 0);
+		group.setAttributeNS(null, 'width', window.innerWidth);
+		group.setAttributeNS(null, 'height', nav_bar_offset);
+		group.style.display = 'none';
+		svg.appendChild(group);
+	}
+
+	function set_guide_position_to_nav_bar(pos_scalar, overall_length) {
+		const the_guide = get_guide(vars.user.selected_guide);
+		//nav_update_guide_places(the_guide);
+		let zp = pos_scalar - 0.5;
+		zp = naturalize_on_loop(zp, true);
+		const boxArray = [...svg.getElementsByTagName('g')];
+		for (let g of boxArray) g.style.display = "none";
+
+		let guide_places = svg.getElementById(the_guide.userData.guide.shape + '-guide');
+		if (guide_places) {
+
+			guide_places.style.display = "block";
+
+
+			for (let p of guide_places.childNodes) {
+				let ps = zp - parseFloat(p.getAttributeNS(svgNS, 'data-pos-scalar')); //(pos_scalar-0.5)-
+				ps = naturalize_on_loop(ps, true);
+				p.setAttributeNS(null, 'cx', (window.innerWidth * ps));//-(el_width(p)));
+				p.setAttributeNS(svgNS, 'data-pos-offset', ps);
+			}
+		}
+		user_nav_guide_length = overall_length * km_deg;
+		user_slide_scale = window.innerWidth / user_nav_guide_length;
+		user_nav_position = pos_scalar;
+
+		nav_origin = 0.5;
+		nav_zero = zp;
+
+		svg_zero.setAttributeNS(null, 'x', (window.innerWidth * nav_zero) - (el_width(svg_zero)));
+		svg_origin.setAttributeNS(null, 'x', (window.innerWidth * nav_origin) - (el_width(svg_origin)));
+
+	}
+
+	update_nav_position(0.5);
+
+	const nav_info = svg.getElementById("nav_info");
+
+	function update_nav(offset_amount) {
+		nav_zero += offset_amount;
+		nav_origin += offset_amount;
+		nav_zero = naturalize_on_loop(nav_zero, true);
+		nav_origin = naturalize_on_loop(nav_origin, true);
+
+		svg_origin.setAttributeNS(null, 'x', (window.innerWidth * nav_origin) - (el_width(svg_origin)));
+		svg_zero.setAttributeNS(null, 'x', (window.innerWidth * nav_zero) - (el_width(svg_zero)));
+
+		user_nav_position += offset_amount;
+		user_nav_position = naturalize_on_loop(user_nav_position, true);
+
+		const guide_places = svg.getElementById(vars.user.selected_guide + '-guide');
+		if (guide_places) {
+			for (let p of guide_places.childNodes) {
+				let ps = parseFloat(p.getAttributeNS(svgNS, 'data-pos-offset'));
+				ps += offset_amount;
+				ps = naturalize_on_loop(ps, true);
+				p.setAttributeNS(null, 'cx', (window.innerWidth * ps));//-(el_width(p)));
+				p.setAttributeNS(svgNS, 'data-pos-offset', ps);
+			}
+		}
+
+		//nav_info.childNodes[0].nodeValue = user_nav_guide_length.toFixed(2)+'km '+user_nav_position.toFixed(2)+' '+nav_selected_guide;
+	}
+
+	function svg_interact(type, deltaX, deltaY, object, event) {
+		if (type === 'drag') {
+			let ost = vars.view_flip ? 1 : -1;
+			let offset = (deltaX / window.innerWidth) * (user_slide_scale) * ost;
+
+			update_nav(offset);
+
+			move_point_on_curve(user_nav_position, false);
+			//scroll_phi_theta(nav_bar_pos,false);
+			//console.log(type,deltaX);
+		} else if (type === 'clicked') {
+			let ost = vars.view_flip ? 1 : -1;
+			let offset = ((deltaX / window.innerWidth) - 0.5) * (-1);
+
+			update_nav(offset);
+
+			move_point_on_curve(user_nav_position, false);
+
+		} else if (type === 'move') {
+			//console.log(event.target.tagName);
+			if (event.target.tagName === 'circle') {
+				const the_guide = get_guide(vars.user.selected_guide);
+				let pid = event.target.getAttributeNS(svgNS, 'data-id');
+				let p = the_guide.userData.guide.linked_places[pid];
+				//log.place.echo(event.target.getAttributeNS(svgNS, 'data-id'));
+				log.nav.echo([p.place.name, p.place.locale, '(' + p.place.country + ')']);
+			}
+
+		} else {
+			if(log.nav) log.nav.unwatch();
+		}
+	}
+
+	dragControls(svg, svg_interact, svg, {passive: true});//camera_position
+
+
+	const log_field = document.getElementById('info');
+
+	let log = {};
+	let log_new = false;
+
+	function log_display() {
+		if (!log_new) return;
+		log_field.innerHTML = '';
+		for (const l in log) {
+			let obj = log[l];
+			if (obj.watch) {
+				let lines_array = obj.val;
+				log_field.innerHTML += '<b class="highlited">' + obj.name + '</b></br>';
+				if (lines_array) {
+					for (let li of lines_array) {
+						log_field.innerHTML += (li === undefined ? 'undefined' : li) + '</br>';//.toString()
+					}
+				}
+			}
+		}
+		log_new = false;
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	class log_var {
+		constructor(name, initial = null) {
+			this.name = name;
+			this.val = initial;
+			this.watch = null;
+		}
+
+		echo(val) {
+			if (val !== this.val) log_new = true;
+			this.val = val;
+			this.watch = true;
+		}
+
+		unwatch() {
+			this.watch = null;
+		}
+	}
+
+
+	const vars = {
+		abstract: true,
+		curve_segments: 18, ///should be multiple of 3
+		clicks: 0,
+		env_color: 0x111133,
+		show_lines: true,
+		show_tiles: true,
+		show_grid_points: true,
+		show_tile_planes: true,
+		show_tile_fills: true,
+		show_tile_lines: true,
+		show_tile_places: true,
+		show_tile_depths: true,
+		grid_size: 18,
+		grid_divisions: 18,
+		view_flip: false,
+		view_to_threshold: true,
+		threshold_size: 12,
+		traversal_rate: 1,
+		map_data_spec: './datasets/indices/data-map-spec-test.json',
+		map_data_paths_whole: './datasets/indices/data-guides-test.json',
+		map_data_tile_index: './datasets/indices/data-index-aggregated-test.json',
+		map_data_tile_base: (zoom_level, tile_number) => './datasets/tiles/zoom-' + zoom_level + '/data-tile-' + tile_number + '-test.json',
+		map_data_tile_depth_base: (zoom_level, tile_number) => './datasets/data/depths/zoom-' + zoom_level + '/data-tile-' + tile_number + '-test.json',
+		map_data_tile_urban_base: (tile_number) => './datasets/data/urban/data-tile-' + tile_number + '-test.json',
+		map: {
+			rect: {
+				min_X: null,
+				min_Y: null,
+				max_X: null,
+				max_Y: null
+			},
+			c: null,
+			w: 0,
+			h: 0,
+			x_off: 0,
+			y_off: 0,
+			s: 10.0
+		},
+		view: {
+			base_pos: 260.0,
+			zoom_limits: {'1': 1.0, '2': 0.3, '3': 0.15, '4': 0.075},
+			get_zoom: function (z) {
+				let ast = Object.entries(this.zoom_limits).filter(a => a[1] > z);
+				if (ast.length) {
+					return ast[ast.length - 1][0];
+				} else {
+					return 1;
+				}
+			},
+			nav_bar_offset: nav_bar_offset,
+			width: window.innerWidth,
+			height: window.innerHeight - nav_bar_offset,
+			reset: function () {
+				this.width = window.innerWidth;
+				this.height = window.innerHeight - this.nav_bar_offset;
+			}
+		},
+		tile_selection: {
+			active: 0,
+			previous: 0
+		},
+		user: {
+			zoom: null,
+			zoom_level: null,
+			position: new THREE.Vector3(),
+			guide_position_scalar: 0,
+			guide_position_origin_scalar: 0,
+			pointer_position: new THREE.Vector3(),
+			local_position: new THREE.Vector3(),
+			touching_guide: null,
+			selected_guide: null,
+			mouse: {
+				x: 0.0,
+				y: 0.0,
+				z: 0.0,
+				state: false,
+				pressed: false,
+				clicked: false
+			}
+		}
+	}
+
+
+	let gui, camera, scene, renderer, stats, cube, raycaster, user_position_marker, user_mouse_marker, nice_arrow, nice_arrow_mini;
+	let axis_helper, grid_helper, arrow_helper, arrow_helper_2, arrow_helper_3, markers_group, north_mark;
+	let map_tiles_group, map_group, map_plane, map_points, map_guides, map_guides_verts;
+	let state_keys, gen_keys;
+
+	let load_counter = 0;
+	let load_scope = 0;
+	//handle camera
+	const cube_box = new THREE.BoxGeometry(2, 2, 2);
+	cube = new THREE.Mesh(cube_box, new THREE.MeshStandardMaterial({color: 0xffffff}));
+	cube.rotateX(Math.PI / -2);
+
+	let cam_base_pos = new THREE.Vector3(0, 0, vars.view.base_pos);
+	let cam_pos = new THREE.Vector3(0, vars.view.base_pos, 0);
+
+	const camera_frustum = new THREE.Frustum();
+	const camera_frustum_m = new THREE.Matrix4();
+
+	const w = new THREE.Vector3();
+	const k = new THREE.Vector3();
+	const v = new THREE.Vector3();
+	const u = new THREE.Vector3(0, 1, 0);
+	const un = new THREE.Vector3(0, 0, 1);
+	const v_q = new THREE.Quaternion();
+	const color = new THREE.Color();
+
+	axis_helper = new THREE.AxesHelper(10);
+	grid_helper = new THREE.GridHelper(vars.grid_size, vars.grid_divisions);
+
+	const dir = new THREE.Vector3(0, 0, 1);
+	const origin = new THREE.Vector3(0, 0, 0);
+	const length = 2;
+	let hex = 0xFFFF00;
+	arrow_helper = new THREE.ArrowHelper(dir, origin, length, hex);
+	arrow_helper.visible = true;
+	arrow_helper_2 = new THREE.ArrowHelper(dir, origin, length * 0.5, hex);
+	arrow_helper_2.visible = true;
+	arrow_helper_3 = new THREE.ArrowHelper(dir, origin, length * 0.5, hex);
+	arrow_helper_3.visible = true;
+
+	const pointsMaterial = new THREE.PointsMaterial({
+		//color: 0x0080ff,
+		size: 0.3,
+		vertexColors: true
+	});
+	const mapGuideVerticesMaterial = new THREE.PointsMaterial({
+		color: 0xFFFFFF,
+		size: 0.05,
+		transparent: true,
+		opacity: 0.3
+	});
+	const mapPlaneMaterial = new THREE.MeshStandardMaterial({
+		color: 0xFFFF00,
+		side: THREE.DoubleSide,
+		flatShading: true,
+		transparent: true,
+		opacity: 0.25
+	});
+	const mapMeshMaterial = new THREE.MeshBasicMaterial({
+		color: 0x006600,
+		side: THREE.FrontSide,
+		transparent: true,
+		opacity: 1
+	});
+	const mapGuidesMaterial = new THREE.LineBasicMaterial({
+		color: 0xFFFFFF,
+		transparent: true,
+		opacity: 0.3
+	});
+	const mapTileLinesMaterial = new LineMaterial({
+		color: 0xffffff,
+		linewidth: 0.01, // in world units with size attenuation, pixels otherwise
+		vertexColors: true,
+		dashed: false,
+		alphaToCoverage: true,
+		worldUnits: true
+	});
+	const mapTileFillsMaterial = new THREE.MeshBasicMaterial({
+		color: 0x0000FF,
+		transparent: true,
+		opacity: 0.5
+	});
+	const mapTilePlacesMaterial = new THREE.MeshBasicMaterial({
+		color: 0xFFFF00,
+		// transparent: true,
+		// opacity:0.5
+	});
+	const mapTileUrbanAreasMaterial = new THREE.MeshBasicMaterial({
+		color: 0xFFFF00,
+		transparent: true,
+		opacity:0.15
+	});
+	const mapTileDepthsMaterial = new THREE.PointsMaterial({
+		size: 0.2,
+		vertexColors: true
+	});
+	const mapMarkersMaterial = new THREE.MeshBasicMaterial({
+		color: 0xFF00FF,
+		side: THREE.FrontSide,
+		//wireframe: true,
+		// transparent: true,
+		// opacity:0.5
+	});
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	// UTILITY FUNCTIONS:
+	function show_load(i){
+		load_scope = load_counter+i > load_counter ? load_counter+i : load_scope;
+		load_counter += i;
+		if(load_counter === 0) load_scope = 0;
+		const ost = load_scope > 0 ? load_counter / load_scope : 0;
+		const seg = Math.floor(window.innerWidth / load_scope);
+	  const arm = `repeating-linear-gradient(to right, greenyellow 0, greenyellow ${seg-2}px, transparent ${seg}px, transparent ${seg+2}px)`;
+		loader.style.width = (ost*window.innerWidth)+'px'.toString();
+		loader.style.background = arm;
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	const normalize_val = (val, mi, ma) => (val - mi) / (ma - mi);
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	//At the Tropic of Cancer and Tropic of Capricorn (23.5 degrees north and south), the distance is 68.94 miles (110.948 kilometers).
+	const km_deg = 110.948;
+	const deg_to_km = (v) => (v * km_deg);
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function naturalize_on_loop(value, side = false) {
+		if (value > 1) return side ? value - 1 : 0;
+		if (value < 0) return side ? 1 + value : 1;
+		return value;
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function get_centroid(points_array) {
+		const L = points_array.length;
+		let xx = 0, yy = 0, zz = 0;
+		for (let pt of points_array) {
+			xx += pt.x;
+			yy += pt.y;
+			zz += pt.z;
+		}
+		return new THREE.Vector3(xx / L, yy / L, zz / L);
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	const get_guide = (g_num) => map_guides.children.find(g => g.userData.guide.shape === g_num);
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	// SCENE BUILDING:
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function map_guides_resolve_places(place_node, tile_number) {
+		const clone = Object.assign({}, place_node);
+		k.set(clone.loc[0], clone.loc[1], 0.0);
+
+		let set = map_tiles_group.children[tile_number].intersects_shapes;
+		let places_count = 0;
+		for (let l of set) {
+			const c_pos = get_point_on_curve(k, l);
+			if (c_pos[0]) {
+				const the_guide = get_guide(l);
+				const p_obj = {
+					'position': c_pos[0],
+					'place': clone,
+					'uid': places_count
+				}
+				places_count++;
+				the_guide.userData.guide.linked_places.push(p_obj);
+				nav_update_guide_places(the_guide);
+			}
+		}
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function make_user_position_mark(radius) {
+		const curve = new THREE.EllipseCurve(
+			0, 0,            // ax, aY
+			radius, radius,           // xRadius, yRadius
+			0, 2 * Math.PI,  // aStartAngle, aEndAngle
+			true,            // aClockwise
+			0                 // aRotation
+		);
+
+		curve.updateArcLengths();
+
+		const points = curve.getPoints(201);
+		const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+		const material = new THREE.LineDashedMaterial({
+			color: 0x00FF00,
+			linewidth: 1,
+			scale: 1,
+			dashSize: 0.1,
+			gapSize: 0.1,
+		});
+
+		// Create the final object to add to the scene
+		const line = new THREE.Line(geometry, material);
+		line.userData.radius = radius;
+		line.computeLineDistances();
+		line.rotateX(Math.PI / 2);
+		return line;
+
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function make_pointer_arrow() {
+		let points = [];
+		const raw_points = [
+			0, 0,
+			10, 20,
+			6, 20,
+			7, 32,
+			0, 32
+		];
+
+		for (let e = 0; e < raw_points.length; e += 2) {
+			points.push(new THREE.Vector2(raw_points[e], raw_points[e + 1]));
+		}
+
+		const a_geometry = new THREE.LatheGeometry(points, 20);
+		const a_material = new THREE.MeshStandardMaterial({
+			color: 0xFF3300,
+			side: THREE.FrontSide,
+			flatShading: true,
+			roughness: 0,
+			metalness: 0.25,
+			emissive: 0x161616
+		});
+		//const a_material = new MeshStandardMaterial( { color: 0xffff00 } );
+		const arrow = new THREE.Mesh(a_geometry, a_material);
+		arrow.userData.base_color = arrow.material.color;
+		arrow.material.needsUpdate = true;
+
+		arrow.scale.set(0.02, 0.02, 0.02);
+		return arrow;
+
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function make_markers_group() {
+		markers_group = new THREE.Group();
+		const markes_count = 10;
+		for (let n = 0; n < markes_count; n++) {
+			const verts = new Float32Array(18);
+			let int = (Math.PI * 2) / 6;
+			for (let i = 0; i < verts.length; i += 3) {
+				verts[i] = Math.cos((i / 3) * int);
+				verts[i + 1] = Math.sin((i / 3) * int);
+				verts[i + 2] = 0.0;
+			}
+			const a_geometry = new THREE.BufferGeometry();
+			a_geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+			a_geometry.setIndex([0, 1, 2, 2, 3, 0, 3, 4, 5, 5, 0, 3]);
+			const hexagon = new THREE.Mesh(a_geometry, mapMarkersMaterial);
+			hexagon.rotateX(Math.PI / -2);
+			hexagon.scale.set(0.050, 0.050, 0.050);
+			markers_group.add(hexagon);
+		}
+		return markers_group;
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function exportToJsonFile(jsonData) {
+		let dataStr = JSON.stringify(jsonData);
+		let dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+		let exportFileDefaultName = 'data.json';
+		let linkElement = document.createElement('a');
+		linkElement.setAttribute('href', dataUri);
+		linkElement.setAttribute('download', exportFileDefaultName);
+		linkElement.click();
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	class location_poi {
+		constructor (location_as_json){
+			this.data = location_as_json;
+		}
+
+		init(){
+
+		}
+
+		get_mesh(){
+			let sca = (5 - this.data.scale) * 0.01;
+			const geometry = new THREE.CircleGeometry(sca, 24);
+			const circle = new THREE.Mesh(geometry, mapTilePlacesMaterial);
+			circle.userData.place = this;
+			circle.translateX(this.data.loc[0]);
+			circle.translateY(this.data.loc[1]);
+			circle.translateZ(0.006);
+			return circle;
+		}
+
+		get_svg(){
+
+		}
+
+		name_short(){
+			return [this.data.name, this.data.locale, '('+this.data.country+')'];
+		}
+
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	class tile extends THREE.Group {
+		constructor(name, loc, number, vertices, data_keys=null) {
+
+			super();
+			this.vertices = vertices;
+			this.name = name;
+			this.loc = loc;
+			this.center = new THREE.Vector3();
+			this.zoom_level = 0;
+			this.tile_number = number;
+			this.loaded = {
+				'mapping':[0, 0, 0, 0],
+				'data_flat':[0],
+				'datum':[0, 0, 0, 0]
+			};
+			this.load_lock = false;
+			this.lines = new THREE.Group();
+			this.fills = new THREE.Group();
+			this.places = new THREE.Group();
+			this.urban_areas = new THREE.Group();
+			this.depths = new THREE.Group();
+			this.keywords = null;
+			this.plane = null;
+			this.intersects_shapes = [];
+
+			// {'id': 47, 'lv': [1, 2, 3, 4], 'dt': ['depths'], 'fl': ['urban'], 'au': ['places'], 'gd': ['guide-9']}
+			this.levels = data_keys.lv;
+			this.levels_data = data_keys.dt;
+			this.static_data = data_keys.fl;
+			this.aux_tags = data_keys.au;
+
+			//console.log(this);
+			this.init();
+		}
+
+		init() {
+			const material = mapMeshMaterial.clone();
+			const geometry = new THREE.BufferGeometry().setFromPoints(this.vertices);
+			//geometry.setIndex([0, 3, 2, 2, 1, 0]);
+			geometry.setIndex([0, 1, 2, 2, 3, 0]);
+			geometry.computeVertexNormals();
+			geometry.computeBoundingBox();
+			geometry.boundingBox.getCenter(this.center);
+			this.plane = new THREE.Mesh(geometry, material);
+			this.add(this.plane);
+			this.add(this.fills);
+			this.add(this.urban_areas);
+			this.add(this.places);
+			this.add(this.depths);
+			this.add(this.lines);
+		}
+
+		request_tile(zoom_level, stage) {
+			this.load_lock = true;
+			let return_data = {};
+
+			let load_queue = [
+				['surface', vars.map_data_tile_base(zoom_level, this.tile_number)],
+				['elevation', vars.map_data_tile_depth_base(zoom_level, this.tile_number)]
+			];
+
+			if(this.static_data.includes('urban')){
+				load_queue.push(['urban', vars.map_data_tile_urban_base(this.tile_number)])
+			}
+
+			fetchAll(load_queue).then(result => {
+				for (let i of result) {
+					let k = Object.keys(i);
+					return_data[Object.keys(i)] = i[k];
+				}
+				this.load_tile(return_data, zoom_level, 'mapping');
+			});
+
+		}
+
+		load_tile(data, zoom_level, data_type) {
+			this.loaded[data_type][zoom_level-1] = 1;
+			if (data.hasOwnProperty('elevation')){
+				const source = data.elevation;
+				if (source.hasOwnProperty('depths')) {
+					k.copy(vars.map.vertices[this.tile_number]);//.clone();
+					let data_width = source.depths[0].length;
+
+					let size = Math.pow(data_width, 2);
+					let vertices = [];
+					let d = (1 / data_width)*vars.map.map_deg;
+					let colors = new Float32Array(size * 3);
+
+					const water = [0.2, 0.8];
+					//const land = [0.6,0.2];
+
+					for (let c = 0; c < size; c++) {
+						const x = c % data_width;
+						const y = Math.floor(c / data_width);
+						const z = source.depths[y][x] === null ? 0.0 : source.depths[y][x] / 10000;
+						//console.log(z);
+
+						if (Math.sign(z) === -1) {///< 0.0) {
+							w.set(k.x + (x * d), k.y - (y * d), z);//.multiplyScalar(vars.map.map_deg);
+							vertices.push(w.clone());
+						}
+
+						let cd = c * 3;
+						colors[cd] = 0.0;
+						colors[cd + 1] = water[0];// z < -0.0 ? water[0]:land[0];
+						colors[cd + 2] = water[1];//z < -0.0 ? water[1]:land[1];
+					}
+
+					let pointsGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
+					pointsGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+					const depth_points = new THREE.Points(pointsGeometry, mapTileDepthsMaterial);
+					depth_points.userData.level = zoom_level;
+					this.depths.add(depth_points);
+
+				}
+			}
+			if (data.hasOwnProperty('surface')) {
+				const source = data.surface;
+				if (source.hasOwnProperty('fills')) {
+
+					for (let shape of source.fills) {
+						let exterior_points = []
+						if (shape.hasOwnProperty('out')) {
+							for (let p = 0; p < shape.out.length; p += 2) {
+								exterior_points.push(new THREE.Vector2(shape.out[p], shape.out[p + 1]));
+							}
+						}
+						let interiors = []
+						if (shape.hasOwnProperty('ins')) {
+							for (let interior of shape.ins) {
+								let interior_points = []
+								for (let p = 0; p < interior.length; p += 2) {
+									interior_points.push(new THREE.Vector2(interior[p], interior[p + 1]));
+								}
+								const interior_shape = new THREE.Shape(interior_points);
+								interiors.push(interior_shape);
+							}
+						}
+
+						const outline = new THREE.Shape(exterior_points);
+						if (interiors.length) outline.holes = interiors;
+
+						const geometry = new THREE.ShapeBufferGeometry(outline);
+						const mesh = new THREE.Mesh(geometry, mapTileFillsMaterial);
+						mesh.translateZ(0.001);
+						mesh.userData.level = zoom_level;
+						this.fills.add(mesh);
+					}
+
+
+				}
+				if (source.hasOwnProperty('places')) {
+					this.places_count += source.places.length;
+					const place_layer = new THREE.Group();
+
+					for (let p of source.places) {
+						const place = new location_poi(p);
+						place_layer.add(place.get_mesh());
+						//map_guides_resolve_places(p, this.number);
+					}
+					place_layer.userData.level = zoom_level;
+					this.places.add(place_layer);
+				}
+				if (source.hasOwnProperty('lines')) {
+					const linesMaterial = mapTileLinesMaterial.clone();
+					//stat.push('(' + data.lines.length + ') lines');
+					for (let shape of source.lines) {
+						const points = shape[1];
+						let vertices = [], colors = [];
+						color.setHex(0x00FF22);
+
+						for (let p = 0; p < points.length; p += 2) {
+							vertices.push(points[p], points[p + 1], 0.002);
+							colors.push(color.r, color.g, color.b)
+						}
+
+						const geometry = new LineGeometry();
+						geometry.setPositions(vertices);
+						geometry.setColors(colors);
+						const shape_line = new Line2(geometry, linesMaterial);
+						shape_line.computeLineDistances();
+						shape_line.userData.line_shape = shape[2];
+						shape_line.userData.level = zoom_level;
+
+						if (!this.intersects_shapes.includes(shape[2])) this.intersects_shapes.push(shape[2]);
+						this.lines.add(shape_line);
+					}
+				}
+			}
+			if (data.hasOwnProperty('urban')){
+				//#console.log(this.name, data.urban.areas);
+				for (let shape of data.urban.areas) {
+					let exterior_points = []
+					if (shape.hasOwnProperty('poly')) {
+						for (let p = 0; p < shape.poly.length; p += 2) {
+							exterior_points.push(new THREE.Vector2(shape.poly[p], shape.poly[p + 1]));
+						}
+					}
+
+					const outline = new THREE.Shape(exterior_points);
+					const geometry = new THREE.ShapeBufferGeometry(outline);
+					const mesh = new THREE.Mesh(geometry, mapTileUrbanAreasMaterial);
+					mesh.translateZ(0.002);
+					mesh.userData.level = shape.scale;
+					this.urban_areas.add(mesh);
+				}
+			}
+			this.load_lock = false;
+			this.update();
+		}
+
+		update() {
+			// #// on change zoom-level.
+			// #// TODO: do you change the resolution of data on the js side having loaded full-res data?
+			// #// TODO: should the data have a "start-position" index instead of zeros?
+
+			let zl = this.zoom_level-1;
+			if(!this.loaded.mapping[zl] && this.load_lock === false && this.levels[zl]) this.request_tile(this.zoom_level, null);
+			const a = this.loaded.mapping.slice(0,this.zoom_level).lastIndexOf(1)+1;
+			this.load_level = a;
+
+			this.urban_areas.children.forEach(res => res.visible = (res.userData.level <= this.zoom_level));
+
+			this.depths.children.forEach(res => res.visible = (res.userData.level === a));
+			this.lines.children.forEach(res => res.visible = (res.userData.level === a));
+			this.fills.children.forEach(res => res.visible = (res.userData.level === a));
+			this.places.children.forEach(res => res.visible = (res.userData.level <= a));
+		}
+
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	class mini_toggle {
+		constructor(name, initial = false) {
+			this.conditions = ['off', 'on'];
+			this.name = name;
+			this.state = initial;
+			this.prev_state = !initial;
+			this.toggle = initial;
+			this.obj = {};
+			this.obj[name] = this.toggle;
+			//#this.set(initial);
+		}
+
+		override(value) {
+			this.toggle = value;//!this.toggle;
+			this.obj[this.name] = this.toggle;
+			this.prev_state = this.toggle;
+			key_do_something(this.obj);
+		}
+
+		set(value) {
+			this.state = value;
+			//console.log(this);
+
+			if (this.state !== this.prev_state) {
+				if (value) {
+					this.toggle = !this.toggle;
+					vars[this.name] = this.toggle;
+					this.obj[this.name] = this.toggle;
+					key_do_something(this.obj);
+					log.state_keys.echo([this.name, this.conditions[+this.toggle]]);
+				} else {
+					log.state_keys.unwatch();
+				}
+				this.prev_state = value;
+			}
+		}
+
+		value() {
+			return this.toggle;
+		}
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	state_keys = {
+		'one': new mini_toggle('show_lines', vars.show_lines),
+		'two': new mini_toggle('show_tiles', vars.show_tiles),
+		'three': new mini_toggle('show_grid_points', vars.show_grid_points),
+		'four': new mini_toggle('show_tile_planes', vars.show_tile_planes),
+		'five': new mini_toggle('show_tile_fills', vars.show_tile_fills),
+		'six': new mini_toggle('show_tile_lines', vars.show_tile_lines),
+		'seven': new mini_toggle('show_tile_places', vars.show_tile_places),
+		'eight': new mini_toggle('show_tile_depths', vars.show_tile_depths),
+		'space': new mini_toggle('abstract', vars.abstract),
+	}
+
+	//+++++++++++++++++++++++++++++
+  gen_keys = {
+		'A': {'move': -1},
+		'D': {'move': 1},
+	}
+
+	//+++++++++++++++++++++++++++++
+	const magic = {
+		move: function (o) {
+			const flip = vars.view_flip ? o : o*-1;
+			move_point_on_curve(flip, true);
+		},
+		show_lines: function (o) {
+			map_guides.visible = o;
+			map_guides_verts.visible = o;
+		},
+		show_tiles: function (o) {
+			map_tiles_group.visible = o;
+		},
+		show_grid_points: function (o) {
+			map_points.visible = o;
+		},
+		show_tile_planes: function (o) {
+			map_tiles_group.children.forEach(t => t.plane.visible = o);
+		},
+		show_tile_fills: function (o) {
+			map_tiles_group.children.forEach(t => t.fills.visible = o);
+		},
+		show_tile_lines: function (o) {
+			map_tiles_group.children.forEach(t => t.lines.visible = o);
+		},
+		show_tile_places: function (o) {
+			map_tiles_group.children.forEach(t => t.places.visible = o);
+		},
+		show_tile_depths: function (o) {
+			map_tiles_group.children.forEach(t => t.depths.visible = o);
+		},
+		abstract: function (o) {
+			//console.log(cube.rotation);
+
+			if (o) {
+				cube.userData.last_rotation = cube.rotation.clone();
+				cam_base_pos.set(0, 0, vars.view.base_pos);
+				cube.rotation.set(Math.PI / -2, 0, 0);
+			} else {
+				if (cube.userData.hasOwnProperty('last_rotation')) {
+					const fr = cube.userData.last_rotation;
+					cube.rotation.set(fr._x, fr._y, fr._z);
+				}
+				cam_base_pos.set(0, 0, 10);
+			}
+		}
+	}
+
+	//+++++++++++++++++++++++++++++
+	function move(dir) {
+		console.log('moved', dir);
+	}
+
+	//+++++++++++++++++++++++++++++
+	function execute(dir) {
+		console.log('did it!', dir);
+	}
+
+	//+++++++++++++++++++++++++++++
+	function key_do_something(key) {
+		let e = Object.keys(key);
+		magic[e](key[e]);
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function build_gui() {
+		gui = new GUI();
+		let general = gui.addFolder("General Options");//.toggleHide();
+		general.add(vars, 'show_lines').name('Guide Lines(1)').onChange(function (value) {
+			Object.values(state_keys).find(o => o.name === 'show_lines').override(value);
+		}).listen();
+		general.add(vars, 'show_tiles').name('Sectors(2)').onChange(function (value) {
+			Object.values(state_keys).find(o => o.name === 'show_tiles').override(value);
+		}).listen();
+		general.add(vars, 'show_grid_points').name('Grid Vertices(3)').onChange(function (value) {
+			Object.values(state_keys).find(o => o.name === 'show_grid_points').override(value);
+		}).listen();
+
+		let view = gui.addFolder("View Options");//.toggleHide();
+		view.add(vars, 'traversal_rate', 1, 10).step(0.1).name('Move distance [km]').listen();
+		view.add(vars, 'threshold_size', 1, 100).step(1).name('Tangent distance [km]').listen();
+		view.add(vars, 'view_flip').name('Flip Orientation').listen();
+		view.add(vars, 'view_to_threshold').name('Orient to Curve').listen();
+
+		let tile = gui.addFolder("Sector Options");
+		tile.add(vars, 'show_tile_planes').name('Planes(4)').onChange(function (value) {
+			Object.values(state_keys).find(o => o.name === 'show_tile_planes').override(value);
+		}).listen();
+		tile.add(vars, 'show_tile_fills').name('Shapes(5)').onChange(function (value) {
+			Object.values(state_keys).find(o => o.name === 'show_tile_fills').override(value);
+		}).listen();
+		tile.add(vars, 'show_tile_lines').name('Paths(6)').onChange(function (value) {
+			Object.values(state_keys).find(o => o.name === 'show_tile_lines').override(value);
+		}).listen();
+		tile.add(vars, 'show_tile_places').name('Places(7)').onChange(function (value) {
+			Object.values(state_keys).find(o => o.name === 'show_tile_places').override(value);
+		}).listen();
+		tile.add(vars, 'show_tile_depths').name('Depths(8)').onChange(function (value) {
+			Object.values(state_keys).find(o => o.name === 'show_tile_depths').override(value);
+		}).listen();
+
+		gui.close();
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function loadSVG_sub(url) {
+		const loader = new SVGLoader();
+
+		loader.load(url, function (data) {
+			const paths = data.paths;
+			let geoms = [];
+			let fillColor = '0x00FF00';
+			let opacity = 0.5;
+
+			for (let i = 0; i < paths.length; i++) {
+				const path = paths[i];
+				fillColor = path.userData.style.fill;
+				opacity = (path.userData.style.opacity !== undefined) ? path.userData.style.opacity : 1;
+				const path_shape = path.toShapes(true);
+				const mesh_geometry = new THREE.ShapeGeometry(path_shape);
+				geoms.push(mesh_geometry);
+			}
+
+			const material = new THREE.MeshBasicMaterial({
+				color: new THREE.Color().setStyle(fillColor),
+				opacity: opacity,
+				transparent: true,
+				side: THREE.DoubleSide,
+			});
+
+			const g = mergeBufferGeometries(geoms);
+			g.computeBoundingSphere();
+			g.center();
+			g.rotateX(Math.PI / 2);
+			let map_mesh = new THREE.Mesh(g, material);
+			north_mark.add(map_mesh);
+			north_mark.scale.set(0.01, 0.01, 0.01);
+			north_mark.position.setY(0.025);
+		});
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function init() {
+		const log_vars = [
+			'pos',
+			'zoom',
+			'touching',
+			'keys',
+			'state_keys',
+			'json',
+			'info',
+			'tile',
+			'guide',
+			'place',
+			'click',
+			'nav',
+			'selection'
+		];
+
+		for (let e of log_vars) {
+			log[e] = (new log_var(e))
+		}
+		vars.user.zoom = vars.view.base_pos;
+
+		//log.info.echo(['init map_points count: ' + map_points.geometry.attributes.position.count]);
+
+		//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+		function translateAction(type, deltaX, deltaY, object) {
+			if (type === 'drag') {
+				//#v.copy(vars.user.position);
+				object.rotateOnWorldAxis(u, deltaX / 100);
+				object.rotateX(deltaY / 100);
+				// object.position.x += (-deltaX / (200/cam_base_pos.z));
+				// object.position.y += (deltaY / (200/cam_base_pos.z));
+				object.updateMatrixWorld();
+			}
+
+			if (type === 'zoom') {
+				cam_base_pos.multiplyScalar(1 + (deltaY / 200));
+				let zz = cam_base_pos.z.toFixed(2);
+				vars.user.zoom = cam_base_pos.z;
+				vars.user.zoom_level = vars.view.get_zoom(vars.user.zoom / vars.view.base_pos);
+				log.zoom.echo([zz, 'level-' + vars.user.zoom_level]);
+
+			} else {
+				log.zoom.unwatch();
+			}
+
+			if (type === 'clicked') vars.user.mouse.clicked = true;
+
+			vars.user.mouse.state = type;
+			vars.user.mouse.x = (deltaX / vars.view.width) * 2 - 1;
+			vars.user.mouse.y = (-deltaY / vars.view.height) * 2 + 1;
+
+		}
+
+		//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+		function getKeyActions(raw, refined) {
+			Object.keys(state_keys).forEach(key => state_keys[key].set(refined.includes(key)));
+			let pk = Object.keys(gen_keys);
+			let dpk = pk.filter(a => refined.includes(a));
+
+			if (dpk.length > 0) {
+				dpk.forEach(key => key_do_something(gen_keys[key]));
+				log.keys.echo(dpk);
+			} else {
+				log.keys.unwatch();
+			}
+
+		}
+
+		//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+		camera = new THREE.PerspectiveCamera(50, vars.view.width / vars.view.height, 1, 1000);
+		scene = new THREE.Scene();
+		scene.background = new THREE.Color(vars.env_color);
+
+		user_position_marker = make_user_position_mark(1);
+		user_mouse_marker = make_user_position_mark(1);
+
+		nice_arrow = make_pointer_arrow();
+		nice_arrow_mini = make_pointer_arrow();
+		nice_arrow_mini.scale.set(0.01, 0.01, 0.01);
+		nice_arrow_mini.material.color.offsetHSL(0, 0, 1.0);
+
+		north_mark = new THREE.Object3D();
+		loadSVG_sub('./img/north.svg');
+		scene.add(north_mark);
+
+		const triangle = make_markers_group();
+
+		scene.add(map_group);
+
+		scene.add(arrow_helper);
+		scene.add(triangle);
+		scene.add(arrow_helper_2);
+		scene.add(arrow_helper_3);
+		scene.add(user_position_marker);
+		scene.add(user_mouse_marker);
+		scene.add(nice_arrow);
+		scene.add(nice_arrow_mini);
+
+		user_position_marker.position.copy(vars.user.position);
+
+		const light = new THREE.PointLight(0xFFFFFF, 2); ///0xDB8B00
+		light.position.set(0, 1000);
+		scene.add(light);
+
+		//scene.fog = new THREE.Fog( vars.env_color, 0.015, 20 );
+
+		renderer = new THREE.WebGLRenderer(); //{powerPreference: "high-performance", antialias: true});
+		renderer.setPixelRatio(2);//window.devicePixelRatio);//(2)
+		renderer.setSize(vars.view.width, vars.view.height);
+		document.body.appendChild(renderer.domElement);
+
+		dragControls(renderer.domElement, translateAction, cube, {passive: true});//camera_position
+		keyControls(window, getKeyActions);
+
+		stats = new Stats();
+		document.body.appendChild(stats.dom);
+
+		raycaster = new THREE.Raycaster();
+		raycaster.params.Line.threshold = 0.5;//0.025;
+
+		scene.updateMatrixWorld();
+
+		window.addEventListener('resize', onWindowResize);
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function get_point_on_guide(world_point, guide_id) {
+		const guide = get_guide(guide_id);
+		const guide_curve = guide.userData.guide.curve;
+		let searchArray = [];
+		let uPosition = null;
+		let c = null;
+		// Loop through curve.points to find our final point
+		// bear in mind offset at 'l' which calculates the min distance via the number of points on the line.
+		for (let i = 0; i < guide_curve.points.length; i++) {
+			searchArray.push(guide_curve.points[i]);
+			const gl = guide_curve.getLength();
+			let d = guide_curve.points[i].distanceTo(world_point);
+			let l = 1 / (guide_curve.points.length / gl);
+			if (d < l && searchArray.length > 1) {
+				let curve2 = new THREE.CatmullRomCurve3(searchArray);
+				curve2.arcLengthDivisions = searchArray.length * vars.curve_segments;
+				curve2.updateArcLengths();
+				uPosition = curve2.getLength() / gl;
+				let t = guide_curve.getTangentAt(uPosition);
+				k.subVectors(world_point, guide_curve.points[i]).normalize();
+				let sign = Math.sign(k.dot(t));
+				uPosition = (curve2.getLength() / gl) + ((d / gl) * sign);
+				uPosition = naturalize_on_loop(uPosition, true);
+				break;
+			}
+		}
+
+		if (uPosition !== null) {
+			let um = guide_curve.getUtoTmapping(uPosition);
+			c = guide_curve.getPoint(um);
+			map_group.localToWorld(c);
+		}
+
+		return [uPosition, c];
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function move_point_on_curve(dir, key_action = true) {
+		if (vars.user.selected_guide === null) return;
+		const guide = get_guide(vars.user.selected_guide);
+		const guide_curve = guide.userData.guide.curve;
+		const centroid = guide.userData.guide.centroid.clone();
+		const L = 1 / deg_to_km(guide_curve.getLength());
+		const D = vars.traversal_rate * L;
+
+		if (key_action) {
+			vars.user.guide_position_scalar += D * dir;
+			update_nav(D * dir);
+			vars.user.guide_position_scalar = naturalize_on_loop(vars.user.guide_position_scalar);
+		} else {
+			vars.user.guide_position_scalar = dir;
+		}
+
+		const guide_position_scalar = vars.user.guide_position_scalar;
+		const thresh = vars.threshold_size;
+
+		let a = naturalize_on_loop(guide_position_scalar - (thresh * D), true);
+		let b = naturalize_on_loop(guide_position_scalar + (thresh * D), true);
+
+		let ua = guide_curve.getUtoTmapping(a);
+		let ub = guide_curve.getUtoTmapping(b);
+		let ac = guide_curve.getPoint(ua);
+		let bc = guide_curve.getPoint(ub);
+		map_group.localToWorld(ac);
+		map_group.localToWorld(bc);
+
+		let um = guide_curve.getUtoTmapping(guide_position_scalar);
+		let c = guide_curve.getPoint(um);
+		map_group.localToWorld(c);
+
+		markers_group.children[0].position.copy(ac);
+		markers_group.children[1].position.copy(bc);
+
+		map_group.localToWorld(centroid);
+
+		k.subVectors(ac, bc).multiplyScalar(0.5).add(bc);
+		vars.user.position.copy(k);
+		arrow_helper.position.copy(k);
+		position_user(k, 'move');
+
+		cube.getWorldDirection(v);
+
+		let view_dir = vars.view_flip ? 1 : -1;
+
+		if (vars.view_to_threshold) {
+			w.subVectors(ac, bc).normalize();
+			k.crossVectors(u, w).multiplyScalar(view_dir).normalize();
+			arrow_helper.setDirection(k);
+		} else {
+			k.subVectors(centroid, vars.user.position.clone()).multiplyScalar(view_dir).normalize();
+			arrow_helper.setDirection(k);
+		}
+
+		nice_arrow_mini.position.copy(vars.user.position);
+		north_mark.position.copy(un.clone().multiplyScalar(user_position_marker.userData.radius * -2).add(vars.user.position));
+
+		w.crossVectors(u, v);
+		let angle = w.dot(k);
+		cube.rotateOnWorldAxis(u, angle);
+		cube.updateMatrixWorld();
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function onWindowResize() {
+		vars.view.reset();
+		camera.aspect = vars.view.width / vars.view.height;
+		camera.updateProjectionMatrix();
+		renderer.setSize(vars.view.width, vars.view.height);
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function position_user(target_pos, mode = 'none') {
+		if (mode === 'clicked') {
+			if (vars.user.touching_guide === null) {
+				vars.user.selected_guide = null;
+				const boxArray = [...svg.getElementsByTagName('g')];
+				for (let g of boxArray) g.style.display = "none";
+			} else {
+				vars.user.selected_guide = vars.user.touching_guide;
+				k.copy(vars.user.pointer_position);
+				map_group.worldToLocal(k);
+				let c_pos = get_point_on_guide(k, vars.user.selected_guide);
+				vars.user.guide_position_scalar = c_pos[0];
+				const guide = get_guide(vars.user.selected_guide);
+				set_guide_position_to_nav_bar(vars.user.guide_position_scalar, guide.userData.guide.length);
+				move_point_on_curve(0, true);
+			}
+
+			v.copy(vars.user.pointer_position);
+			vars.user.position.copy(v);
+
+			k.set(0, 0.05, 0);
+			v.add(k);
+
+			arrow_helper.position.copy(v);
+			arrow_helper_2.position.copy(v);
+			arrow_helper_3.position.copy(v);
+
+			camera.getWorldDirection(k);
+			w.crossVectors(k, u);
+			k.projectOnPlane(u);
+
+			arrow_helper.setDirection(u);
+			arrow_helper_2.setDirection(w);
+			arrow_helper_3.setDirection(k);
+			north_mark.position.copy(un.clone().multiplyScalar(user_position_marker.userData.radius * -1.2).add(v));
+			nice_arrow.position.copy(v);
+			user_position_marker.position.copy(v);
+		}
+		if (mode === 'move') {
+			user_mouse_marker.position.copy(target_pos);
+		}
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function animate() {
+		requestAnimationFrame(animate);
+		render();
+		stats.update();
+	}
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	let vn = 0, vm = 0;
+
+	function render() {
+		v_q.setFromUnitVectors(u, vars.user.position.clone().normalize());
+		cam_pos.lerp(cam_base_pos.clone().applyQuaternion(cube.quaternion), 0.1);
+		camera.up.lerp(u.clone().applyQuaternion(cube.quaternion), 0.1);
+		camera.position.addVectors(cam_pos, vars.user.position);
+		camera.lookAt(vars.user.position);
+		raycaster.setFromCamera(vars.user.mouse, camera);
+		camera.updateMatrix();
+		camera.updateMatrixWorld();
+
+		vars.user.local_position.subVectors(camera.position,vars.user.position).multiplyScalar(0.5).add(vars.user.position);
+		map_group.worldToLocal(vars.user.local_position);
+
+		let intersects = raycaster.intersectObject(map_plane, false);
+		if (intersects.length > 0) {
+		  v.copy(intersects[0].point);
+		  vars.user.pointer_position.copy(v);
+		  map_group.worldToLocal(v);
+		  log.pos.echo(['LON ' + v.x.toFixed(4), 'LAT ' + v.y.toFixed(4), vars.user.mouse.state]);
+		}
+
+		document.body.style.cursor = 'default';
+		vars.user.touching_guide = null;
+
+		for (let tile of map_tiles_group.children) {
+			v.subVectors(vars.user.local_position, tile.center);
+			vn = normalize_val(((v.length() * 6.0) / vars.map.s), 1, vars.map.s);
+			vm = 4 * (1 - (Math.round(vn * vars.map.s) / 4));
+			if (vm < 1) vm = 1;
+			if (vm > 4) vm = 4;
+
+			if (tile.zoom_level !== vm) {
+				tile.zoom_level = vm;
+				tile.plane.material.opacity = tile.zoom_level / 4;
+				if (tile.zoom_level >= 1) tile.update(tile.zoom_level);
+			}
+
+			if (tile.zoom_level > 2 && vars.user.mouse.state !== 'drag') {
+				intersects = raycaster.intersectObject(tile.plane, true);
+				if (intersects.length) {
+					raycaster.intersectObject(tile.places, true).forEach(p => log.place.echo(p.object.userData.place.name_short()));
+					//basically here to see any lines and at any level of depth;
+					let g = raycaster.intersectObject(tile.lines, true).filter(e => e.object.visible);
+					if(g.length){
+						let sel = g[0].object.userData.line_shape;
+						if(map_guides.userData.shapes.includes(sel)){
+							position_user(g[0].pointOnLine,'move');
+							vars.user.touching_guide = sel;
+							document.body.style.cursor = 'pointer';
+						}
+					}
+				}
+			}
+		}
+
+		log.guide.echo([vars.user.touching_guide]);
+
+		if(vars.user.mouse.clicked){
+			log.click.echo(['consumed('+vars.clicks+') clicks']);
+			vars.clicks ++;
+			vars.user.mouse.clicked = false;
+			position_user(null,'clicked');
+		}
+
+		log_display();
+		renderer.render(scene, camera);
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function start() {
+		build_gui();
+		init();
+		animate();
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	function build_map_group(map_data_group) {
+		map_group = new THREE.Group();
+		map_tiles_group = new THREE.Group();
+		//set map bounds and basic placement.
+		//build critical vertices.
+		//get instances of tiles with data.
+		//build motion guides.
+
+		const map_deg = map_data_group.map_spec.map_degrees;
+		vars.map.map_deg = map_deg;
+		vars.map.rect = map_data_group.map_spec.rect;
+		vars.map.w = (vars.map.rect.max_X-vars.map.rect.min_X);//*(1/map_deg);
+		vars.map.h = (vars.map.rect.max_Y-vars.map.rect.min_Y);//*(1/map_deg);
+
+		vars.map.sectors = (vars.map.w * (1/map_deg))*( vars.map.h * (1/map_deg));
+
+		vars.map.w_offset = (vars.map.rect.min_X) - (vars.map.w / -2);
+		vars.map.h_offset = (vars.map.rect.min_Y) - (vars.map.h / -2);
+		vars.map.coverage = map_data_group.map_data_index.length/vars.map.sectors;
+
+		k.set(vars.map.w_offset, vars.map.h_offset, 0.0);
+		vars.map.c = k.clone();
+
+		console.log(vars.map);
+
+		const geometry = new THREE.PlaneGeometry(vars.map.w, vars.map.h, 1, 1);
+		map_plane = new THREE.Mesh(geometry, mapPlaneMaterial);
+		map_plane.userData.name = 'map_plane';
+		map_plane.position.copy(k);
+
+		const map_max_dim = vars.map.w;// > vars.map.h ? vars.map.w : vars.map.h
+		//+++++++++++++++++++++++++++++
+		function build_map_sectors_and_tiles(data_index) {
+			// now :{'id': 47, 'lv': [1, 2, 3, 4], 'dt': ['depths'], 'fl': ['urban'], 'au': ['places'], 'gd': ['guide-9']}
+			vars.map.vertices = [];
+			let sx = 0, sy = 0;
+
+			for (let i = 0; i < vars.map.sectors; i++) {
+				let x = i % (map_max_dim * (1/map_deg));
+				let y = Math.floor(i / (map_max_dim * (1/map_deg)));
+				sx = vars.map.rect.min_X + x*map_deg;
+				sy = vars.map.rect.max_Y - y*map_deg;
+				w.set(sx, sy, 0.0);
+				vars.map.vertices.push(w.clone());
+
+				const has_key = data_index.find(g => g.id === i);
+				if(has_key) {
+					let tile_vertices = [
+						w.clone(),
+						w.clone().setY(w.y - map_deg),
+						w.clone().setX(w.x + map_deg).setY(w.y - map_deg),
+						w.clone().setX(w.x + map_deg)
+					]
+
+					let loc = [vars.map.rect.min_X + x, vars.map.rect.min_Y + y];
+					let name = 'M' + loc[0] + '_' + loc[1] + '_' + i;
+					const new_tile = new tile(name, loc, i, tile_vertices, has_key);
+					map_tiles_group.add(new_tile);
+				}
+
+			}
+
+			let colors = new Float32Array(vars.map.vertices.length * 3);
+			for (let c = 0; c < vars.map.vertices.length * 3; c += 3) {
+				colors[c] = 1;
+				colors[c + 1] = 0;
+				colors[c + 2] = 1;
+			}
+
+			let pointsGeometry = new THREE.BufferGeometry().setFromPoints(vars.map.vertices);
+			pointsGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+			map_points = new THREE.Points(pointsGeometry, pointsMaterial);
+		}
+		//+++++++++++++++++++++++++++++
+		function build_map_guides(data) {
+			map_guides = new THREE.Group();
+			let map_guides_vertices = [];
+			let map_guides_shapes = [];
+
+			for (let shape of data) {
+				const points = shape[2];
+				let vertices = [];
+
+				for (let p = 0; p < points.length; p += 2) {
+					v.set(points[p], points[p + 1], 0.005);
+					vertices.push(v.clone());
+				}
+
+				// vertices.reverse();
+				// vertices.pop();
+
+				if (vertices.length > 3) {
+					const curve = new THREE.CatmullRomCurve3(vertices, true);
+					curve.closed = shape[4];
+					const len = curve.getLength();
+					curve.arcLengthDivisions = vertices.length * vars.curve_segments;
+					curve.updateArcLengths();
+
+					let even_points = curve.getSpacedPoints(vertices.length / 2);// / 8);
+
+					if (even_points.length > 3) {
+						//#alert(shape[4]);
+						if(shape[4]) even_points.pop();
+						const fine_curve = new THREE.CatmullRomCurve3(even_points, true);
+						fine_curve.closed = shape[4];
+						fine_curve.arcLengthDivisions = even_points.length * vars.curve_segments;
+						fine_curve.updateArcLengths();
+
+						const curvePoints = fine_curve.getPoints(vertices.length * vars.curve_segments);
+						const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+						const curveObject = new THREE.Line(geometry, mapGuidesMaterial);
+
+						for (let p of fine_curve.points) {
+							map_guides_vertices.push(p);
+							map_guides_shapes.push(shape[1]);
+						}
+
+						curveObject.userData.guide = {
+							'shape': shape[1],
+							'curve': fine_curve,
+							'length': len.toFixed(4),
+							'centroid': get_centroid(curvePoints),
+							'linked_places': []
+						}
+						map_guides.add(curveObject);
+					}
+				}
+			}
+
+			map_guides.userData.shapes = map_guides_shapes;
+
+			let pointsGeometry = new THREE.BufferGeometry().setFromPoints(map_guides_vertices);
+			map_guides_verts = new THREE.Points(pointsGeometry, mapGuideVerticesMaterial);
+		}
+		//+++++++++++++++++++++++++++++
+		build_map_guides(map_data_group.map_guides);
+		build_map_sectors_and_tiles(map_data_group.map_data_index);
+
+		map_group.add(map_points);
+		map_group.add(map_tiles_group);
+		map_group.add(map_guides_verts);
+		map_group.add(map_guides);
+		map_group.add(map_plane);
+		map_plane.visible = false;
+
+		map_group.rotateX(Math.PI / -2);
+		map_group.translateX(-vars.map.w_offset  * vars.map.s);
+		map_group.translateY(-vars.map.h_offset  * vars.map.s);
+		map_group.scale.set(vars.map.s, vars.map.s, vars.map.s);
+
+		console.log("total",vars.map.w * vars.map.h, "coverage", (vars.map.coverage*100).toFixed(2), '%');
+		console.log(vars.map);
+		start();
+	}
+
+	//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+	const loaded_map_data = {};
+	const preloads = [
+		['map_spec', vars.map_data_spec],
+		['map_data_index', vars.map_data_tile_index],
+		['map_guides', vars.map_data_paths_whole]];
+
+	function fetchAll(resource_tuples) {
+		let destination = []
+		resource_tuples.forEach(url => {
+			show_load(1);
+			let ref = fetch(url[1])
+				.then(response => response.json())
+				.then(function (data) {
+					let obj = {};
+					obj[url[0]] = data;
+					show_load(-1);
+					return obj
+				}).catch(function (error) {
+					console.log(url, error);
+					show_load(-1);
+					return error;
+				});
+			destination.push(ref)
+		})
+		return Promise.all(destination);
+	}
+
+	const pre = fetchAll(preloads).then(result => {
+		for (let i of result) {
+			let k = Object.keys(i);
+			loaded_map_data[Object.keys(i)] = i[k];
+		}
+		build_map_group(loaded_map_data);
+	});
+
+
+
+
+</script>
+</body>
+</html>
+
+<!--https://github.com/parcel-bundler/website/issues/655-->
+<!--//sudo lsof -i :8080-->
+<!--//kill -9 <PID>-->
+<!--//https://bytearcher.com/articles/ways-to-get-the-latest-node.js-version-on-a-mac/-->
+<!--//npx parcel build src/index.html-->
+<!--//npx parcel src/index.html-->

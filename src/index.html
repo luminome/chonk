@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<!--https://scottandrecampbell.com/static/jan7-1.html?ok-->
+<!--https://www.toptal.com/javascript/comprehensive-guide-javascript-design-patterns-->
+<!--https://blog.sessionstack.com/how-javascript-works-memory-management-how-to-handle-4-common-memory-leaks-3f28b94cfbec-->
+<!--https://developer.mozilla.org/en-US/docs/Web/JavaScript/Memory_Management-->
+
+<html lang="en">
+<head>
+	<title>via-laceta apr-7 sac</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link type="text/css" rel="stylesheet" href="./css/basic.css">
+	<link type="text/css" rel="stylesheet" href="./css/window.css">
+	<!--		<script src="js/vendor/modernizr-3.11.2.min.js"></script>-->
+
+</head>
+<body>
+<canvas id="drawing-canvas" height="1200" width="1200" style="display:none;">k</canvas>
+<div id="drawing-characters" style="position:absolute;">helpre</div>
+<div id="info"></div>
+
+<div id="menus_container_left">
+	<div id="layers_ui">
+
+		<div id="variable_setter_temp" class="template">
+			<input class="var-text" type="text">
+		</div>
+
+		<div id="menu_header_temp" class="row menuheaderlabel template">
+			<div class="menulabel column-label"></div>
+<!--			<div class="menuctrl">-->
+			<span class="menukey column-button">x</span>
+			<span class="menuspecial column-button">x</span>
+<!--			</div>-->
+		</div>
+	</div>
+
+</div>
+
+<div id="menus_container_right">
+	<div id="info_ui"></div>
+</div>
+
+<div id="nav_bar">
+<!--	<canvas class="nav-image" width="300" height="32"></canvas>-->
+	<svg id="nav_svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"/>
+
+</div>
+<div id="load_bar"></div>
+
+<div id="controls_area">
+	<div id="slider_temp" class="slider">
+
+		<div class="slider-image-container">
+			<canvas class="slider-image" width="300" height="32"></canvas>
+			<div class="slider-marker"></div>
+		</div>
+		<div class="slider-label">
+			<div class="label">hello</div>
+			<div class="label-button">play</div>
+			<div class="label-frame">hello</div>
+		</div>
+
+	</div>
+</div>
+
+<script type="module" src="./js/obspkg.js"></script>
+</body>
+</html>

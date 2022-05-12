@@ -1,0 +1,106 @@
+npx parcel src/index.html --public-url ./ --no-hmr
+
+production build needs '--public-url ./' & probably --no-hmr
+npx parcel build src/index.html --public-url ./
+
+ie:
+sac@luminome chonk % npx parcel src/index.html --public-url ./ --no-hmr
+npx parcel build src/index.html --public-url ./ --no-hmr
+npx parcel build src/index.html --public-url ./ --reporter @parcel/reporter-bundle-analyzer
+
+
+
+
+ln -s /Users/sac/Sites/chonk/static/datasets /Users/sac/Sites/localhost/chonk/dist/datasets
+
+
+
+
+sac@luminome pythonProject % touch ~/.cdsapirc
+url: https://cds.climate.copernicus.eu/api/v2
+key: 121223:20af0935-688e-46af-8e98-ab2400748a0f
+
+
+
+<!--https://github.com/parcel-bundler/website/issues/655-->
+<!--//sudo lsof -i :8080-->
+<!--//kill -9 <PID>-->
+<!--//https://bytearcher.com/articles/ways-to-get-the-latest-node.js-version-on-a-mac/-->
+<!--//npx parcel build src/index.html-->
+<!--//npx parcel src/index.html-->
+
+
+
+
+
+import * as THREE from "https://cdn.skypack.dev/three@0.132.2";
+import {
+  OrbitControls
+} from "https://cdn.skypack.dev/three@0.132.2/examples/jsm/controls/OrbitControls.js";
+
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 1, 1000);
+camera.position.set(0, 0, 10);
+camera.lookAt(scene.position);
+let renderer = new THREE.WebGLRenderer({
+  antialias: true
+});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x404040);
+document.body.appendChild(renderer.domElement);
+
+let controls = new OrbitControls(camera, renderer.domElement);
+
+const geometry = new THREE.TorusKnotGeometry( 2, 0.5, 100, 16 );
+const material = new THREE.MeshNormalMaterial();
+const torusKnot = new THREE.Mesh( geometry, material );
+scene.add( torusKnot );
+
+let pts = new Array(20).fill(0).map(p => {
+  return new THREE.Vector3().random().subScalar(0.5).multiplyScalar(10)
+});
+let g = new THREE.BufferGeometry().setFromPoints(pts);
+let tex = createRadial();
+let m = new THREE.PointsMaterial({
+  map: tex,
+  alphaTest: 0.1,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+});
+let p = new THREE.Points(g, m);
+scene.add(p);
+
+window.addEventListener("resize", onResize);
+
+renderer.setAnimationLoop(_ => {
+  renderer.render(scene, camera);
+})
+
+function onResize(event) {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+
+function createRadial(){
+	let c = document.createElement("canvas");
+  c.width = c.height = 256;
+  let ctx = c.getContext("2d");
+  var x = 127;
+  var y = 127;
+  var radius = 127;
+  let grd = ctx.createRadialGradient(x, y, 1, x, y, radius);
+  grd.addColorStop(0, "white");
+  grd.addColorStop(1, "transparent");
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c);
+}
+
+let tex = createRadial();
+let m = new THREE.PointsMaterial({
+  map: tex,
+  alphaTest: 0.1,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+});
